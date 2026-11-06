@@ -1,0 +1,41 @@
+# Binaries & Executables
+/bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Environment & Sensitive Files
+.env
+.env.local
+*.lic
+
+# Dependency Directories
+node_modules/
+frontend/node_modules/
+
+# Build Outputs
+frontend/dist/
+dist/
+
+# Logs & Temporary Files
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Operating System Files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE & Editor Configurations
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Agent Caches & Internal Logs
+.agents/teamwork/
+go-pkg-cache/

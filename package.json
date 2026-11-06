@@ -1,0 +1,16 @@
+{
+  "name": "brilian-idms",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Brilian - Enterprise Intelligent Document Management System",
+  "scripts": {
+    "test": "node tests/e2e/runner.js",
+    "test:tier1": "node tests/e2e/runner.js --tier=1",
+    "test:tier2": "node tests/e2e/runner.js --tier=2",
+    "test:tier3": "node tests/e2e/runner.js --tier=3",
+    "test:tier4": "node tests/e2e/runner.js --tier=4"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

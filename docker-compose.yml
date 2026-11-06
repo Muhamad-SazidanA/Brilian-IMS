@@ -1,0 +1,123 @@
+version: '3.8'
+
+services:
+  # ----------------------------------------------------------------------------
+  # PostgreSQL 16 with pgvector & tsvector
+  # ----------------------------------------------------------------------------
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: brilian-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-brilian_db}
+      POSTGRES_USER: ${DB_USER:-brilian_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-secure_password_here}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-brilian_user} -d ${DB_NAME:-brilian_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - brilian-network
+
+  # ----------------------------------------------------------------------------
+  # MinIO Object Storage (Dual-Layer AES-256 Storage Backend)
+  # ----------------------------------------------------------------------------
+  minio:
+    image: minio/minio:latest
+    container_name: brilian-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minio_admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minio_secret_password}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - miniodata:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9000/minio/health/live || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - brilian-network
+
+  # ----------------------------------------------------------------------------
+  # MinIO Bucket Auto-Provisioning (One-shot initialization)
+  # ----------------------------------------------------------------------------
+  minio-init:
+    image: minio/mc:latest
+    container_name: brilian-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      /usr/bin/mc alias set myminio http://minio:9000 $${MINIO_ROOT_USER:-minio_admin} $${MINIO_ROOT_PASSWORD:-minio_secret_password} &&
+      /usr/bin/mc mb --ignore-existing myminio/$${MINIO_BUCKET_NAME:-brilian-documents} &&
+      exit 0
+      "
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minio_admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minio_secret_password}
+      MINIO_BUCKET_NAME: ${MINIO_BUCKET_NAME:-brilian-documents}
+    networks:
+      - brilian-network
+
+  # ----------------------------------------------------------------------------
+  # Brilian DMS Engine (Single-Binary Application Service - Production Target)
+  # ----------------------------------------------------------------------------
+  brilian-engine:
+    image: brilian-dms:v1.0.0
+    container_name: brilian-engine
+    restart: unless-stopped
+    ports:
+      - "${SERVER_PORT:-8080}:8080"
+    environment:
+      - SERVER_PORT=${SERVER_PORT:-8080}
+      - GIN_MODE=${GIN_MODE:-release}
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=${DB_USER:-brilian_user}
+      - DB_PASSWORD=${DB_PASSWORD:-secure_password_here}
+      - DB_NAME=${DB_NAME:-brilian_db}
+      - DB_SSLMODE=${DB_SSLMODE:-disable}
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-minio_admin}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-minio_secret_password}
+      - MINIO_BUCKET_NAME=${MINIO_BUCKET_NAME:-brilian-documents}
+      - MINIO_USE_SSL=false
+      - AI_PROVIDER=${AI_PROVIDER:-vertex_ai}
+      - AI_API_KEY=${AI_API_KEY:-your_enterprise_zero_data_retention_api_key}
+      - AI_MODEL_NAME=${AI_MODEL_NAME:-gemini-1.5-flash}
+      - AI_REGION=${AI_REGION:-us-central1}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
+      - LICENSE_FILE_PATH=/app/license.lic
+    volumes:
+      - ./license.lic:/app/license.lic:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks:
+      - brilian-network
+
+volumes:
+  pgdata:
+    driver: local
+  miniodata:
+    driver: local
+
+networks:
+  brilian-network:
+    driver: bridge
